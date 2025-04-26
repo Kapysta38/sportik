@@ -1,7 +1,47 @@
 import uuid
 
+from datetime import datetime
+
 from pydantic import EmailStr
 from sqlmodel import Field, Relationship, SQLModel
+
+
+class UserTagLink(SQLModel, table=True):
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE", primary_key=True
+    )
+    tag_id: uuid.UUID = Field(
+        foreign_key="tag.id", nullable=False, ondelete="CASCADE", primary_key=True
+    )
+
+
+class TagBase(SQLModel):
+    name: str = Field(index=True, unique=True, nullable=False)
+
+
+class TagCreate(TagBase):
+    ...
+
+
+class TagUpdate(SQLModel):
+    name: str | None = None
+
+
+class Tag(TagBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    users: list["User"] | None = Relationship(
+        back_populates="tags", link_model=UserTagLink
+    )
+
+
+class TagPublic(SQLModel):
+    id: uuid.UUID
+    name: str
+
+
+class TagsPublic(SQLModel):
+    data: list[TagPublic]
+    count: int
 
 
 # Shared properties
@@ -20,7 +60,11 @@ class UserCreate(UserBase):
 class UserRegister(SQLModel):
     email: EmailStr = Field(max_length=255)
     password: str = Field(min_length=8, max_length=40)
-    full_name: str | None = Field(default=None, max_length=255)
+
+    first_name: str | None = Field(default=None, max_length=255)
+    last_name: str | None = Field(default=None, max_length=255)
+    gender: str | None = Field(default=None, max_length=255)
+    date_of_birth: datetime
 
 
 # Properties to receive via API on update, all are optional
@@ -44,6 +88,59 @@ class User(UserBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     hashed_password: str
     items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
+
+    # связи
+    tags: list["Tag"] = Relationship(
+        back_populates="users", link_model=UserTagLink
+    )
+    events: list["Event"] = Relationship(back_populates="host")
+
+
+class EventBase(SQLModel):
+    title: str
+    description: str | None = None
+    location_name: str
+    event_datetime: datetime
+    latitude: str | None = None
+    longitude: str | None = None
+
+
+class EventCreate(EventBase):
+    ...
+
+
+class EventUpdate(SQLModel):
+    title: str | None = None
+    description: str | None = None
+    location_name: str | None = None
+    event_datetime: datetime | None = None
+    latitude: str | None = None
+    longitude: str | None = None
+
+
+class Event(EventBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+
+    host_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+    )
+    host: User | None = Relationship(back_populates="events")
+
+
+class EventPublic(SQLModel):
+    id: uuid.UUID
+    title: str
+    description: str | None
+    location_name: str
+    event_datetime: datetime
+    latitude: str | None
+    longitude: str | None
+    host_id: uuid.UUID
+
+
+class EventsPublic(SQLModel):
+    data: list[EventPublic]
+    count: int
 
 
 # Properties to return via API, id is always required
