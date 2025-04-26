@@ -1,136 +1,169 @@
-import { Container, Flex, Image, Input, Text } from "@chakra-ui/react"
-import {
-  Link as RouterLink,
-  createFileRoute,
-  redirect,
-} from "@tanstack/react-router"
-import { type SubmitHandler, useForm } from "react-hook-form"
-import { FiLock, FiUser } from "react-icons/fi"
+import {useState, useEffect} from "react";
+import {useForm, FormProvider, useFormContext} from "react-hook-form";
+import {TagsService, UsersService} from "@/client";
+import {createFileRoute, useNavigate} from "@tanstack/react-router";
+import {Input} from "@chakra-ui/react";
 
-import type { UserRegister } from "@/client"
-import { Button } from "@/components/ui/button"
-import { Field } from "@/components/ui/field"
-import { InputGroup } from "@/components/ui/input-group"
-import { PasswordInput } from "@/components/ui/password-input"
-import useAuth, { isLoggedIn } from "@/hooks/useAuth"
-import { confirmPasswordRules, emailPattern, passwordRules } from "@/utils"
-import Logo from "/assets/images/fastapi-logo.svg"
+type FormValues = {
+    email: string;
+    password: string;
+    confirmPassword: string;
+    first_name: string;
+    last_name: string;
+    gender: string;
+    date_of_birth: string; // ISO
+    tags: string[]; // UUID[]
+};
 
-export const Route = createFileRoute("/signup")({
-  component: SignUp,
-  beforeLoad: async () => {
-    if (isLoggedIn()) {
-      throw redirect({
-        to: "/",
-      })
-    }
-  },
-})
-
-interface UserRegisterForm extends UserRegister {
-  confirm_password: string
+function CredentialsStep() {
+    const {register, formState: {errors}} = useFormContext<FormValues>();
+    return (
+        <>
+            <Input {...register("email", {required: "Email обязателен"})} placeholder="Email"/>
+            {errors.email && <p>{errors.email.message}</p>}
+            <Input type="password" {...register("password", {required: "Пароль обязателен"})} placeholder="Пароль"/>
+            <Input type="password" {...register("confirmPassword", {required: "Подтвердите пароль"})}
+                   placeholder="Повторите пароль"/>
+            {errors.confirmPassword && <p>{errors.confirmPassword.message}</p>}
+        </>
+    );
 }
 
-function SignUp() {
-  const { signUpMutation } = useAuth()
-  const {
-    register,
-    handleSubmit,
-    getValues,
-    formState: { errors, isSubmitting },
-  } = useForm<UserRegisterForm>({
-    mode: "onBlur",
-    criteriaMode: "all",
-    defaultValues: {
-      email: "",
-      full_name: "",
-      password: "",
-      confirm_password: "",
-    },
-  })
-
-  const onSubmit: SubmitHandler<UserRegisterForm> = (data) => {
-    signUpMutation.mutate(data)
-  }
-
-  return (
-    <>
-      <Flex flexDir={{ base: "column", md: "row" }} justify="center" h="100vh">
-        <Container
-          as="form"
-          onSubmit={handleSubmit(onSubmit)}
-          h="100vh"
-          maxW="sm"
-          alignItems="stretch"
-          justifyContent="center"
-          gap={4}
-          centerContent
-        >
-          <Image
-            src={Logo}
-            alt="FastAPI logo"
-            height="auto"
-            maxW="2xs"
-            alignSelf="center"
-            mb={4}
-          />
-          <Field
-            invalid={!!errors.full_name}
-            errorText={errors.full_name?.message}
-          >
-            <InputGroup w="100%" startElement={<FiUser />}>
-              <Input
-                id="full_name"
-                minLength={3}
-                {...register("full_name", {
-                  required: "Full Name is required",
-                })}
-                placeholder="Full Name"
-                type="text"
-              />
-            </InputGroup>
-          </Field>
-
-          <Field invalid={!!errors.email} errorText={errors.email?.message}>
-            <InputGroup w="100%" startElement={<FiUser />}>
-              <Input
-                id="email"
-                {...register("email", {
-                  required: "Email is required",
-                  pattern: emailPattern,
-                })}
-                placeholder="Email"
-                type="email"
-              />
-            </InputGroup>
-          </Field>
-          <PasswordInput
-            type="password"
-            startElement={<FiLock />}
-            {...register("password", passwordRules())}
-            placeholder="Password"
-            errors={errors}
-          />
-          <PasswordInput
-            type="confirm_password"
-            startElement={<FiLock />}
-            {...register("confirm_password", confirmPasswordRules(getValues))}
-            placeholder="Confirm Password"
-            errors={errors}
-          />
-          <Button variant="solid" type="submit" loading={isSubmitting}>
-            Sign Up
-          </Button>
-          <Text>
-            Already have an account?{" "}
-            <RouterLink to="/login" className="main-link">
-              Log In
-            </RouterLink>
-          </Text>
-        </Container>
-      </Flex>
-    </>
-  )
+function PersonalStep() {
+    const {register, formState: {}} = useFormContext<FormValues>();
+    return (
+        <>
+            <Input {...register("first_name", {required: true})} placeholder="Имя"/>
+            <Input {...register("last_name", {required: true})} placeholder="Фамилия"/>
+            <select {...register("gender", {required: true})}>
+                <option value="">Пол</option>
+                <option value="male">Мужской</option>
+                <option value="female">Женский</option>
+            </select>
+            <Input type="date" {...register("date_of_birth", {required: true})} />
+        </>
+    );
 }
 
-export default SignUp
+
+function TagsStep({availableTags}: { availableTags: { id: string; name: string }[] }) {
+    const {watch, setValue, formState: {errors}} = useFormContext<FormValues>();
+    const selected: string[] = watch("tags");
+
+    return (
+        <>
+            <div>
+                {availableTags.map(tag => (
+                    <label key={tag.id}>
+                        <input
+                            type="checkbox"
+                            value={tag.id}
+                            checked={selected.includes(tag.id)}
+                            onChange={() => {
+                                const ids = selected.includes(tag.id)
+                                    ? selected.filter(i => i !== tag.id)
+                                    : [...selected, tag.id];
+                                setValue("tags", ids, {shouldValidate: true});
+                            }}
+                        />
+                        {tag.name}
+                    </label>
+                ))}
+            </div>
+            {errors.tags && <p>{errors.tags.message}</p>}
+        </>
+    );
+}
+
+
+function SignUpWizard() {
+    const methods = useForm<FormValues>({defaultValues: {tags: []}});
+    const {handleSubmit, trigger} = methods;
+    const [step, setStep] = useState(1);
+    const [availableTags, setAvailableTags] = useState<Array<{ id: string; name: string }>>([]);
+    const navigate = useNavigate();
+
+    // Шаг 3: подгрузка тегов
+    useEffect(() => {
+        if (step === 3) {
+            TagsService.readTags({}).then(res => {
+                setAvailableTags(res.data);
+            });
+        }
+    }, [step]);
+
+    const onNext = async () => {
+        // валидация текущего шага
+        let valid = false;
+        if (step === 1) {
+            valid = await trigger(["email", "password", "confirmPassword"]);
+            if (methods.getValues("password") !== methods.getValues("confirmPassword")) {
+                methods.setError("confirmPassword", {message: "Пароли не совпадают"});
+                valid = false;
+            }
+        }
+        if (step === 2) {
+            valid = await trigger(["first_name", "last_name", "gender", "date_of_birth"]);
+        }
+        if (step === 3) {
+            const tags = methods.getValues("tags");
+            if (tags.length < 3) {
+                methods.setError("tags", {message: "Выберите минимум 3 тега"});
+                valid = false;
+            } else {
+                valid = true;
+            }
+        }
+        if (valid) setStep(step + 1);
+    };
+
+    const onSubmit = handleSubmit(async (data) => {
+        // финальный submit
+        try {
+            await UsersService.registerUser({
+                requestBody: {
+                    email: data.email,
+                    password: data.password,
+                    first_name: data.first_name,
+                    last_name: data.last_name,
+                    gender: data.gender,
+                    date_of_birth: data.date_of_birth,
+                    // tags: data.tags,
+                },
+            });
+            navigate({to: "/"}); // перенаправить на главную
+        } catch (err) {
+            console.error(err);
+            methods.setError("email", {message: "Ошибка регистрации"});
+        }
+    });
+
+    return (
+        <FormProvider {...methods}>
+            <form onSubmit={step === 3 ? onSubmit : (e) => {
+                e.preventDefault();
+                onNext();
+            }}>
+                {step === 1 && <CredentialsStep/>}
+                {step === 2 && <PersonalStep/>}
+                {step === 3 && <TagsStep availableTags={availableTags}/>}
+                <div style={{marginTop: 24}}>
+                    {step > 1 && <button type="button" onClick={() => setStep(step - 1)}>← Назад</button>}
+                    <button type="submit">
+                        {step < 3 ? "Далее" : "Зарегистрироваться"}
+                    </button>
+                </div>
+                <button className=" px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 ">
+                    Кнопка
+                </button>
+            </form>
+        </FormProvider>
+    );
+}
+
+
+export const Route = createFileRoute('/signup')({
+    component: SignUpWizard,
+});
+
+export default SignUpWizard
