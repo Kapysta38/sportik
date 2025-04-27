@@ -33,12 +33,7 @@ def assign_tag(
         user_id: uuid.UUID,
         tag_id: uuid.UUID,
         session: SessionDep,
-        current_user: CurrentUser,
 ):
-    if not current_user.is_superuser and current_user.id != user_id:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-
     add_tag_to_user(session=session, user_id=user_id, tag_id=tag_id)
 
 
@@ -51,10 +46,5 @@ def unassign_tag(
         user_id: uuid.UUID,
         tag_id: uuid.UUID,
         session: SessionDep,
-        current_user: CurrentUser,
 ):
-    if not current_user.is_superuser and current_user.id != user_id:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-
     remove_tag_from_user(session=session, user_id=user_id, tag_id=tag_id)
